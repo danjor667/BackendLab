@@ -42,6 +42,7 @@ class Employee(ABC):
 
 
     def generate_payslip(self):
+        #todo: Implement this
         pass
 
 
