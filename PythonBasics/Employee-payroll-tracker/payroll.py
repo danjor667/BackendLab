@@ -1,0 +1,2 @@
+class Payroll:
+    pass
