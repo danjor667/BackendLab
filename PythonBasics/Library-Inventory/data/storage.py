@@ -1,6 +1,6 @@
 import json
 import os
-from book import Book, LibraryResorces
+from book import Book, LibraryResource
 
 
 class FileStorage:
@@ -12,6 +12,7 @@ class FileStorage:
     """
 
     _BASE = os.path.dirname(os.path.abspath(__file__))
+    print(_BASE)
     library_path = os.path.join(_BASE, "library.json")
     borrowed_path = os.path.join(_BASE, "borrowed.json")
 
@@ -56,11 +57,11 @@ class FileStorage:
     def load(self):
         """Loads books and borrowed records from JSON files (disk)."""
         self.books = [
-            LibraryResorces.deserialize(b) for b in self._read(self.library_path)
+            LibraryResource.deserialize(b) for b in self._read(self.library_path)
         ]
         self.borrowed = [
             {
-                "book": LibraryResorces.deserialize(b["book"]),
+                "book": LibraryResource.deserialize(b["book"]),
                 "borrower": b["borrower"],
                 "timestamp": b["timestamp"],
             }
