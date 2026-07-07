@@ -1,5 +1,7 @@
 """Payroll aggregation: hold a set of employees and total their pay."""
+
 from utils import format_currency
+
 
 class Payroll:
     def __init__(self):
@@ -31,10 +33,12 @@ class Payroll:
 
     def summary(self):
         title = f"Payroll summary ({len(self._employees)} employees)"
-        return "\n".join([
-            title,
-            "=" * len(title),
-            f"Total gross: {format_currency(self.total_gross())}",
-            f"Total tax:   {format_currency(self.total_tax())}",
-            f"Total net:   {format_currency(self.total_net())}",
-        ])
+        return "\n".join(
+            [
+                title,
+                "=" * len(title),
+                f"Total gross: {format_currency(self.total_gross())}",
+                f"Total tax:   {format_currency(self.total_tax())}",
+                f"Total net:   {format_currency(self.total_net())}",
+            ]
+        )
