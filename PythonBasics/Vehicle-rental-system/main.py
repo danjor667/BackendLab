@@ -10,7 +10,7 @@ from utils import (
 
 
 def _split(line, count):
-    """Split a pipe-delimited command line into exactly `count` parts (padded)."""
+    """Split a pipe-delimited command line into exactly `count` parts."""
     parts = [p.strip() for p in line.split("|")]
     parts += [""] * (count - len(parts))
     return parts[:count]
