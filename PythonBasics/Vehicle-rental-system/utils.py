@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 
 from vehicle import Car, Truck, Bike, VEHICLE_TYPES
@@ -74,14 +75,24 @@ def _matches_rental(record, name_key, renter):
     return record["renter"].lower() == renter.lower()
 
 
+def _billable_hours(rented_at, returned_at):
+    """Hours to bill for a rental: every started hour counts, minimum 1."""
+    seconds = (returned_at - datetime.fromisoformat(rented_at)).total_seconds()
+    return max(1, math.ceil(seconds / 3600))
+
+
 def return_vehicle(name, renter=""):
-    """Return a rented vehicle to the garage."""
+    """Return a rented vehicle to the garage and bill for the time kept."""
     name_key = name.strip().lower()
     for record in rented:
         if _matches_rental(record, name_key, renter):
             rented.remove(record)
             available.append(record["vehicle"])
+            hours = _billable_hours(record["timestamp"], datetime.now())
+            cost = record["vehicle"].rental_cost(hours)
             print(f"Returned: {record['vehicle']}")
+            print(f"Rented at {record['timestamp']}, kept {hours} hour(s)")
+            print(f"Amount due: ${cost:,.2f}")
             return record["vehicle"]
     print(f"No rented '{name}' found for {renter or 'anyone'}.")
     return None
