@@ -15,6 +15,12 @@ class Payroll:
     def employees(self):
         return tuple(self._employees)
 
+    def total_base(self):
+        return sum(e.base_salary for e in self._employees)
+
+    def total_bonus(self):
+        return sum(e.bonus for e in self._employees)
+
     def total_gross(self):
         return sum(e.salary for e in self._employees)
 
@@ -37,6 +43,8 @@ class Payroll:
             [
                 title,
                 "=" * len(title),
+                f"Total base:  {format_currency(self.total_base())}",
+                f"Total bonus: {format_currency(self.total_bonus())}",
                 f"Total gross: {format_currency(self.total_gross())}",
                 f"Total tax:   {format_currency(self.total_tax())}",
                 f"Total net:   {format_currency(self.total_net())}",

@@ -6,6 +6,7 @@ from utils import (
     borrow_book,
     return_book,
     list_inventory,
+    report,
     seed_initial_inventory,
 )
 
@@ -51,6 +52,10 @@ class Console(cmd.Cmd):
     def do_list(self, _line):
         "list  — show the full inventory"
         list_inventory()
+
+    def do_report(self, _line):
+        "report  — borrowing activity: current loans, returns, and days held"
+        report()
 
     def do_quit(self, _line):
         "quit  — exit the tracker"

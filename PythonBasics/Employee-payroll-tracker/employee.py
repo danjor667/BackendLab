@@ -21,11 +21,21 @@ class Employee(ABC):
 
     @property
     @abstractmethod
-    def salary(self):
-        """The salary of the employee"""
+    def base_salary(self):
+        """This period's regular pay, before any bonus."""
         raise NotImplementedError(
-            "subclasses of Employee must provide their salary implementation"
+            "subclasses of Employee must provide their base_salary implementation"
         )
+
+    @property
+    def bonus(self):
+        """Bonus earned this period (default: none)."""
+        return 0.0
+
+    @property
+    def salary(self):
+        """Gross pay for the period: regular pay plus bonus."""
+        return self.base_salary + self.bonus
 
     @property
     def tax(self):
@@ -55,6 +65,8 @@ class Employee(ABC):
         lines.extend(self._extra_lines())
         lines.extend(
             [
+                f"Base pay:   {format_currency(self.base_salary)}",
+                f"Bonus:      {format_currency(self.bonus)}",
                 f"Gross pay:  {format_currency(self.salary)}",
                 f"Tax ({format_percent(self._tax_rate)}): {format_currency(self.tax)}",
                 f"Net pay:    {format_currency(self.net_pay)}",
@@ -65,6 +77,8 @@ class Employee(ABC):
 
 class FullEmployee(Employee):
     """Salaried employee paid a fixed amount each month."""
+
+    BONUS_RATE = 0.10
 
     def __init__(self, name, annual_salary, tax_rate=0.20):
         super().__init__(name, annual_salary, tax_rate)
@@ -77,9 +91,14 @@ class FullEmployee(Employee):
         return self._base_pay
 
     @property
-    def salary(self):
-        # Monthly gross pay.
+    def base_salary(self):
+        # Monthly regular pay.
         return self._base_pay / 12
+
+    @property
+    def bonus(self):
+        """Performance bonus: a flat percentage of monthly pay."""
+        return self.base_salary * self.BONUS_RATE
 
     def _extra_lines(self):
         return [f"Annual salary: {format_currency(self.annual_salary)}"]
@@ -87,6 +106,9 @@ class FullEmployee(Employee):
 
 class ContractEmployee(Employee):
     """Contractor paid an hourly rate for hours worked in the period."""
+
+    OVERTIME_AFTER = 100
+    OVERTIME_PREMIUM = 0.5
 
     def __init__(self, name, hourly_rate, hours_worked, tax_rate=0.10):
         if hours_worked < 0:
@@ -102,8 +124,14 @@ class ContractEmployee(Employee):
         return self._base_pay
 
     @property
-    def salary(self):
+    def base_salary(self):
         return self._base_pay * self.hours_worked
+
+    @property
+    def bonus(self):
+        """Overtime premium on every hour worked past OVERTIME_AFTER."""
+        overtime_hours = max(0, self.hours_worked - self.OVERTIME_AFTER)
+        return overtime_hours * self.hourly_rate * self.OVERTIME_PREMIUM
 
     def _extra_lines(self):
         return [
@@ -114,6 +142,8 @@ class ContractEmployee(Employee):
 
 class Intern(Employee):
     """Intern paid a flat monthly stipend, tax-free by default."""
+
+    COMPLETION_BONUS = 250.0
 
     def __init__(self, name, stipend, tax_rate=0.0):
         super().__init__(name, stipend, tax_rate)
@@ -126,5 +156,10 @@ class Intern(Employee):
         return self._base_pay
 
     @property
-    def salary(self):
+    def base_salary(self):
         return self._base_pay
+
+    @property
+    def bonus(self):
+        """Flat completion bonus, the same for every intern."""
+        return self.COMPLETION_BONUS
