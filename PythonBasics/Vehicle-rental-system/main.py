@@ -28,20 +28,20 @@ class Console(cmd.Cmd):
         add_vehicle(name, price, kind or "car")
 
     def do_rent(self, line):
-        "rent <name> | <renter>"
-        name, renter = _split(line, 2)
-        if not (name and renter):
-            print("Usage: rent <name> | <renter>")
+        "rent <id or name> | <renter>"
+        name_or_id, renter = _split(line, 2)
+        if not (name_or_id and renter):
+            print("Usage: rent <id or name> | <renter>")
             return
-        rent_vehicle(name, renter)
+        rent_vehicle(name_or_id, renter)
 
     def do_return(self, line):
-        "return <name> [| <renter>]"
-        name, renter = _split(line, 2)
-        if not name:
-            print("Usage: return <name> [| <renter>]")
+        "return <id or name> [| <renter>]  — the renter only narrows an ambiguous name"
+        name_or_id, renter = _split(line, 2)
+        if not name_or_id:
+            print("Usage: return <id or name> [| <renter>]")
             return
-        return_vehicle(name, renter)
+        return_vehicle(name_or_id, renter)
 
     def do_list(self, _line):
         "list  — show the full inventory"

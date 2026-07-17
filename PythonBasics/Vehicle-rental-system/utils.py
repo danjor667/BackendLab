@@ -22,6 +22,20 @@ def seed_initial_inventory():
     available.extend(samples)
 
 
+def _all_vehicles():
+    """Every vehicle the shop owns, garaged or out on rental."""
+    return [*available, *(record["vehicle"] for record in rented)]
+
+
+def _find_duplicate(cls, name):
+    """The vehicle of the same type and name already owned, if any."""
+    key = name.lower()
+    for vehicle in _all_vehicles():
+        if type(vehicle) is cls and vehicle.name.lower() == key:
+            return vehicle
+    return None
+
+
 def add_vehicle(name, price, kind="car"):
     """Create and garage a vehicle. Returns it, or None if it already exists."""
     cls = _VEHICLE_KINDS.get(kind.lower(), Car)
@@ -31,29 +45,47 @@ def add_vehicle(name, price, kind="car"):
         except ValueError:
             print(f"Invalid price: '{price}'")
             return None
-    vehicle = cls(name, price)
-    if vehicle in available or any(r["vehicle"] == vehicle for r in rented):
-        print(f"Already in the garage: {vehicle}")
+    name = name.strip()
+    existing = _find_duplicate(cls, name)
+    if existing is not None:
+        print(f"Already in the garage: {existing}")
         return None
+    vehicle = cls(name, price)
     available.append(vehicle)
     print(f"Added: {vehicle}")
     return vehicle
 
 
-def _find_available(name):
-    name = name.strip().lower()
-    for vehicle in available:
-        if vehicle.name.lower() == name:
-            return vehicle
-    return None
+def _lookup(vehicles, key):
+    """Vehicles matching `key`, which may be an id or a name.
+
+    Ids are unique, so an id hit is always a single vehicle and wins outright;
+    names can collide across types, so a name hit may return several.
+    """
+    key = key.strip().lower()
+    by_id = [v for v in vehicles if v.id.lower() == key]
+    if by_id:
+        return by_id
+    return [v for v in vehicles if v.name.lower() == key]
 
 
-def rent_vehicle(name, renter):
-    """Move a vehicle from the garage to a renter."""
-    vehicle = _find_available(name)
-    if vehicle is None:
-        print(f"Not available to rent: '{name}'")
+def _report_ambiguous(key, lines):
+    """Tell the user their key hit several vehicles and to use an id instead."""
+    print(f"'{key}' matches {len(lines)} vehicles — use the id instead:")
+    for line in lines:
+        print(f"  {line}")
+
+
+def rent_vehicle(name_or_id, renter):
+    """Move a vehicle from the garage to a renter, found by id or name."""
+    matches = _lookup(available, name_or_id)
+    if not matches:
+        print(f"Not available to rent: '{name_or_id}'")
         return None
+    if len(matches) > 1:
+        _report_ambiguous(name_or_id, [str(v) for v in matches])
+        return None
+    vehicle = matches[0]
     available.remove(vehicle)
     rented.append(
         {
@@ -66,36 +98,39 @@ def rent_vehicle(name, renter):
     return vehicle
 
 
-def _matches_rental(record, name_key, renter):
-    """True if a rental record matches the vehicle name (and renter, if given)."""
-    if record["vehicle"].name.lower() != name_key:
-        return False
-    if not renter:
-        return True  # no renter filter -> matches whoever has it
-    return record["renter"].lower() == renter.lower()
-
-
 def _billable_hours(rented_at, returned_at):
     """Hours to bill for a rental: every started hour counts, minimum 1."""
     seconds = (returned_at - datetime.fromisoformat(rented_at)).total_seconds()
     return max(1, math.ceil(seconds / 3600))
 
 
-def return_vehicle(name, renter=""):
-    """Return a rented vehicle to the garage and bill for the time kept."""
-    name_key = name.strip().lower()
-    for record in rented:
-        if _matches_rental(record, name_key, renter):
-            rented.remove(record)
-            available.append(record["vehicle"])
-            hours = _billable_hours(record["timestamp"], datetime.now())
-            cost = record["vehicle"].rental_cost(hours)
-            print(f"Returned: {record['vehicle']}")
-            print(f"Rented at {record['timestamp']}, kept {hours} hour(s)")
-            print(f"Amount due: ${cost:,.2f}")
-            return record["vehicle"]
-    print(f"No rented '{name}' found for {renter or 'anyone'}.")
-    return None
+def return_vehicle(name_or_id, renter=""):
+    """Return a rented vehicle to the garage and bill for the time kept.
+
+    The vehicle is found by id or by name; an id identifies the rental on its
+    own, so `renter` is only needed to narrow an ambiguous name.
+    """
+    matches = _lookup([r["vehicle"] for r in rented], name_or_id)
+    records = [r for r in rented if r["vehicle"] in matches]
+    if renter:
+        records = [r for r in records if r["renter"].lower() == renter.lower()]
+    if not records:
+        print(f"No rented '{name_or_id}' found for {renter or 'anyone'}.")
+        return None
+    if len(records) > 1:
+        _report_ambiguous(
+            name_or_id, [f"{r['vehicle']} -> {r['renter']}" for r in records]
+        )
+        return None
+    record = records[0]
+    rented.remove(record)
+    available.append(record["vehicle"])
+    hours = _billable_hours(record["timestamp"], datetime.now())
+    cost = record["vehicle"].rental_cost(hours)
+    print(f"Returned: {record['vehicle']}")
+    print(f"Rented by {record['renter']} at {record['timestamp']}, kept {hours} hour(s)")
+    print(f"Amount due: ${cost:,.2f}")
+    return record["vehicle"]
 
 
 def display_availability():

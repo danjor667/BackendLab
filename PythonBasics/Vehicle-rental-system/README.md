@@ -11,6 +11,13 @@ The app is a REPL built on Python's standard-library `cmd` module. Commands call
 
 Renting moves a vehicle from the garage to the rental list and stamps the start time. Returning moves it back and **bills for the duration**: every started hour counts (minimum 1 hour), multiplied by the vehicle's hourly rate. On launch the garage is seeded with a few sample vehicles. State is in-memory only — it resets between runs.
 
+### Vehicle ids
+
+Every vehicle gets a short id when it is created: its type's letter plus a per-type counter, so cars are `C1`, `C2`, ..., trucks `T1`, `T2`, ... and bikes `B1`, `B2`, .... `list` shows the id in brackets, and `rent` / `return` take **either an id or a name**:
+
+- An id names exactly one vehicle, so `return T1` is enough — no renter needed.
+- A name may hit several vehicles (two different types can both be a "Toyota Corolla"). When it does, the command refuses and prints the candidates so you can repeat it with an id.
+
 ### Pricing model
 
 `Vehicle` is an abstract base class that stores the base hourly price and requires each subclass to define `renting_price` — the effective hourly rate derived from it:
@@ -50,8 +57,8 @@ Arguments with multiple fields are separated by a pipe (`|`):
 | Command | Description |
 | --- | --- |
 | `add <name> \| <hourly price> [\| car\|truck\|bike]` | Garage a new vehicle (kind defaults to `car`) |
-| `rent <name> \| <renter>` | Rent an available vehicle to someone |
-| `return <name> [\| <renter>]` | Return a vehicle and print the amount due; renter narrows the match |
+| `rent <id or name> \| <renter>` | Rent an available vehicle to someone |
+| `return <id or name> [\| <renter>]` | Return a vehicle and print the amount due; the renter is only needed to narrow an ambiguous name |
 | `list` | Show the full inventory: garage + who has what |
 | `quit` (or Ctrl-D) | Exit |
 
@@ -60,52 +67,71 @@ Arguments with multiple fields are separated by a pipe (`|`):
 ```
 >> list
 In the garage (4):
-  Car 'Toyota Corolla' ($20.00/hour)
-  Car 'Honda Civic' ($22.00/hour)
-  Truck 'Ford F-150' ($60.00/hour)
-  Bike 'Yamaha MT-07' ($9.00/hour)
+  [C1] Car 'Toyota Corolla' ($20.00/hour)
+  [C2] Car 'Honda Civic' ($22.00/hour)
+  [T1] Truck 'Ford F-150' ($60.00/hour)
+  [B1] Bike 'Yamaha MT-07' ($9.00/hour)
 >> add Vespa Primavera | 12 | bike
-Added: Bike 'Vespa Primavera' ($6.00/hour)
->> rent Ford F-150 | Dana
-Dana rented Truck 'Ford F-150' ($60.00/hour)
+Added: [B2] Bike 'Vespa Primavera' ($6.00/hour)
+>> rent T1 | Dana
+Dana rented [T1] Truck 'Ford F-150' ($60.00/hour)
 >> list
 In the garage (4):
-  Car 'Toyota Corolla' ($20.00/hour)
-  Car 'Honda Civic' ($22.00/hour)
-  Bike 'Yamaha MT-07' ($9.00/hour)
-  Bike 'Vespa Primavera' ($6.00/hour)
+  [C1] Car 'Toyota Corolla' ($20.00/hour)
+  [C2] Car 'Honda Civic' ($22.00/hour)
+  [B1] Bike 'Yamaha MT-07' ($9.00/hour)
+  [B2] Bike 'Vespa Primavera' ($6.00/hour)
 Rented out (1):
-  Truck 'Ford F-150' ($60.00/hour) -> Dana (2026-07-08T10:57:06)
->> return Ford F-150 | Dana
-Returned: Truck 'Ford F-150' ($60.00/hour)
-Rented at 2026-07-08T10:57:06, kept 1 hour(s)
+  [T1] Truck 'Ford F-150' ($60.00/hour) -> Dana (2026-07-17T06:53:54)
+>> return T1
+Returned: [T1] Truck 'Ford F-150' ($60.00/hour)
+Rented by Dana at 2026-07-17T06:53:54, kept 1 hour(s)
 Amount due: $60.00
 >> quit
 Goodbye.
+```
+
+Where a name is ambiguous, the command lists the candidates instead of guessing:
+
+```
+>> add Toyota Corolla | 40 | truck
+Added: [T2] Truck 'Toyota Corolla' ($60.00/hour)
+>> rent Toyota Corolla | Sam
+'Toyota Corolla' matches 2 vehicles — use the id instead:
+  [C1] Car 'Toyota Corolla' ($20.00/hour)
+  [T2] Truck 'Toyota Corolla' ($60.00/hour)
+>> rent T2 | Sam
+Sam rented [T2] Truck 'Toyota Corolla' ($60.00/hour)
 ```
 
 ## API overview
 
 ### `Vehicle` (abstract, `vehicle.py`)
 
-- `Vehicle(name, price)` — validates that the base hourly price is non-negative.
+- `Vehicle(name, price)` — validates that the base hourly price is non-negative, then assigns `id`.
+- `id` — the vehicle's unique handle, `ID_PREFIX` + a per-type counter (`C1`, `T1`, `B1`, ...).
+- `ID_PREFIX` *(class attribute)* — the letter this type's ids start with; defaults to the first letter of the class name.
 - `renting_price` *(abstract property)* — effective hourly rate; each subclass derives it from the base price.
 - `rental_cost(hours)` — `renting_price × hours`; rejects negative hours.
-- Equality is same type + case-insensitive name, used for duplicate detection.
+- Equality (and hashing) is by `id`, so each vehicle is only ever equal to itself.
+
+Each subclass gets its own id counter automatically via `__init_subclass__`, which also rejects a type whose `ID_PREFIX` is already claimed — so a prefix clash is an error at import time rather than confusing ids at runtime.
 
 ### Vehicle types
 
-- `Car(name, price)` — rents at the base price.
-- `Truck(name, price)` — rents at `price × 1.5` (`Truck.SURCHARGE`).
-- `Bike(name, price)` — rents at `price × 0.5` (`Bike.DISCOUNT`).
+- `Car(name, price)` — ids `C1`, `C2`, ...; rents at the base price.
+- `Truck(name, price)` — ids `T1`, `T2`, ...; rents at `price × 1.5` (`Truck.SURCHARGE`).
+- `Bike(name, price)` — ids `B1`, `B2`, ...; rents at `price × 0.5` (`Bike.DISCOUNT`).
 
 ### Command helpers (`utils.py`)
 
-- `add_vehicle(name, price, kind)` — create the right vehicle type and garage it; rejects duplicates and invalid prices.
-- `rent_vehicle(name, renter)` — move a vehicle to the rental list with a start timestamp.
-- `return_vehicle(name, renter="")` — move it back, compute billable hours (`ceil` of elapsed time, minimum 1), and print the amount due.
+- `add_vehicle(name, price, kind)` — create the right vehicle type and garage it; rejects same-type duplicate names and invalid prices.
+- `rent_vehicle(name_or_id, renter)` — move a vehicle to the rental list with a start timestamp.
+- `return_vehicle(name_or_id, renter="")` — move it back, compute billable hours (`ceil` of elapsed time, minimum 1), and print the amount due.
 - `display_availability()` — print the garage and active rentals.
 - `seed_initial_inventory()` — populate sample vehicles when the garage is empty.
+
+Both `rent_vehicle` and `return_vehicle` resolve their first argument as an id before falling back to a name, and refuse to act on a name that matches more than one vehicle.
 
 ## Extending
 
@@ -120,4 +146,13 @@ class Van(Vehicle):
         return self._base_price * 1.25
 
 VEHICLE_TYPES = (Car, Truck, Bike, Van)
+```
+
+`Van` needs no `ID_PREFIX` — it defaults to `V`, which nothing else claims, so its vehicles are `V1`, `V2`, .... A type whose first letter is already taken must pick its own, or importing `vehicle.py` fails with a `TypeError` naming the clash:
+
+```python
+class Camper(Vehicle):
+    """Camper van — 'C' belongs to Car, so claim a free prefix."""
+
+    ID_PREFIX = "M"   # ids M1, M2, ...
 ```
